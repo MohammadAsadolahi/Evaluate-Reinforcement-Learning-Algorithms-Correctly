@@ -1,7 +1,11 @@
 algorithm_name="TDS" # we insert the name of the algorithm to be registered in the CSV files to illustrations
 enviroment_name='Humanoid-v3'
 seed=4
-start_timesteps=10000
+
+timestep_limit=500000
+evaluationStep=5000
+printStep=50
+initial_timestep=10000
 
 def policy_evaluation(agent, enviroment_name,episodes=10):
     evaluation_env = gym.make(enviroment_name)
@@ -30,37 +34,24 @@ average_rewards=[]
 total_rewards=[]
 
 steps=0
-for ep in range(1,10000000000):
-    done=False
-    state,_=env.reset(seed=seed)
-    rewards=0
-    episode_timesteps=0
-    truncuated=False
+while (steps <= timestep_limit):
+    state, _ = env.reset(seed=seed)
+    done, truncuated = False, False
     while (not done) and (not truncuated):
-        episode_timesteps+=1
-        if steps < start_timesteps:
+        if steps < initial_timestep:
             action = env.action_space.sample()
         else:
-            action,_=agent.choose_action(state)
-        agent.learn()
-        state_,reward,done,truncuated,info=env.step(action)
-        agent.remember(state,action,reward,state_,done)
-        rewards+=reward
-        steps+=1
-        state=state_
+            action = (policy.select_action(np.array(state))+ np.random.normal(0, max_action * Beta, size=action_dim)).clip(-max_action, max_action)
+        state_, reward, done, truncuated, info = env.step(action)
+        replay_buffer.add(state, action, state_, reward, done)
+        steps += 1
+        state = state_
+        if steps>=initial_timestep:
+            policy.train(replay_buffer, 100)
         if(steps%5000)==0:
-            evaluation_reward=policy_evaluation(agent, enviroment_name)
+            evaluation_reward = eval_policy(policy, envName)
             evaluations.append(evaluation_reward)
             print(f"Evaluation over {10} episodes: {evaluation_reward:.3f}  step{steps}")
-    total_rewards.append(rewards)
-    average_rewards.append(sum(total_rewards)/len(total_rewards))
-    if(steps>1000000):
-        break
-    if (ep%200==0):
-        if ep<100:
-            print(f"episode: {ep}   reward: {rewards}  avg so far:{average_rewards[-1]} steps so far:{steps}")
-        else:
-            print(f"episode: {ep}   reward: {rewards}  m :{sum(total_rewards[-100:])/len(total_rewards[-100:])} t {average_rewards[-1]}:{steps}    steps so far:{steps}")
 
 
 variant = dict(algorithm=algorithm_name,env=enviroment_name,)
